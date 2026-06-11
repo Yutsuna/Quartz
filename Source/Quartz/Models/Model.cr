@@ -111,9 +111,9 @@ module Quartz
         \{% end %}
         \{% for decl in QUARTZ_FIELDS %} \{% fields << decl %} \{% end %}
 
-        # Union of `Int64` (id) and every field type. Return type of `to_h`
+        # Union of `UInt64` (id) and every field type. Return type of `to_h`
         # and `[]`.
-        alias FieldValue = Int64 \{% for d in fields %} | \{{d.type}} \{% end %}
+        alias FieldValue = UInt64 \{% for d in fields %} | \{{d.type}} \{% end %}
 
         # Keyword-only constructor over every field (inherited ones included)
         # Defaults declared on `field` apply.
@@ -134,7 +134,7 @@ module Quartz
           h
         end
 
-        # Field access by name. Raises `Quartz::UnknownField` for a name
+        # Field access by name. Raises `Quartz::EUnknownField` for a name
         # that is not declared on this model.
         def []( name : String ) : FieldValue
           case name
@@ -145,7 +145,7 @@ module Quartz
             @\{{d.var}}
           \{% end %}
           else
-            raise Quartz::UnknownField.new( \{{@type.name.stringify}}, name )
+            raise Quartz::EUnknownField.new( \{{@type.name.stringify}}, name )
           end
         end
 
@@ -170,7 +170,7 @@ module Quartz
 
         # Hashes the same components as `==`, honoring the `==`/`hash`
         # contract (stdlib-untyped `hasher` signature).
-        def hash( hasher ) : UInt64
+        def hash( hasher ) : Crystal::Hasher
           hasher = @id.hash( hasher )
           \{% for d in fields %}
           hasher = @\{{d.var}}.hash( hasher )

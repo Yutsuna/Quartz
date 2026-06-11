@@ -64,9 +64,6 @@ module Quartz
           record.id = @next_id
           @next_id += 1
 
-        elsif record.id.negative?
-          raise EInvalidId.new( TInstance.name, record.id )
-
         elsif record.id >= @next_id
           # INFO: advance the sequence before inerting
           # -> prevents a collision if the record is already present in the store
@@ -89,12 +86,12 @@ module Quartz
     end
 
     # Returns the record with the given id, or raises `ERecordNotFound`.
-    def find( id : Int64 ) : TInstance
+    def find( id : UInt64 ) : TInstance
       find?(id ) || raise ERecordNotFound.new( TInstance.name, id )
     end
 
     # Returns the record with the given id, or `nil`.
-    def find?( id : Int64 ) : TInstance?
+    def find?( id : UInt64 ) : TInstance?
       @mutex.synchronize { @records[id]? }
     end
 
@@ -138,8 +135,8 @@ module Quartz
     end
 
     # Removes the record with the given id. Returns `false` if absent.
-    def delete(id : Int64) : Bool
-      @mutex.synchronize { !@records.delete(id).nil? }
+    def delete(id : UInt64) : Bool
+      @mutex.synchronize { !@records.delete( id ).nil? }
     end
 
     # Removes every record and resets the id sequence. Mainly for specs:
@@ -157,14 +154,14 @@ module Quartz
     private def _validate_field_names(**args) : Nil
       args.each { |key, _value|
         name = key.to_s
-        unless name == "id" || T.fields.includes?(name)
-          raise UnknownField.new(T.name, name)
+        unless name == "id" || TInstance.fields.includes?( name )
+          raise EUnknownField.new( TInstance.name, name )
         end
       }
     end
 
-    private def _matches?(record : T, **args) : Bool
-      args.each { |key, value|  return false unless record[key.to_s] == value }
+    private def _matches?( record : TInstance, **args ) : Bool
+      args.each { |key, value|  return false unless record[ key.to_s ] == value }
       true
     end
 
