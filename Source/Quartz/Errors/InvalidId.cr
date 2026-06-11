@@ -6,7 +6,7 @@ module Quartz
 class EInvalidId < AError
 
   def initialize(model : String, id : UInt64)
-    super( "invalid id #{id} for #{model} — ids must be positive" )
+    super( "invalid id #{id} for #{model}" )
   end
 
 end

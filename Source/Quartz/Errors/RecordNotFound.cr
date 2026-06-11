@@ -4,7 +4,7 @@ module Quartz
 # Raised by `Manager#find` and `Manager#find_by` when no record matches.
 class ERecordNotFound < AError
 
-  def initialize( model : String, id : Int64 )
+  def initialize( model : String, id : UInt64 )
     super( "#{model} with id=#{id} not found" )
   end
 
