@@ -1,14 +1,15 @@
 module Quartz
 
 
-# Raised by `Manager#store` when a record carries an invalid explicit id.
+# Raised by `FManager#store` when a record carries an invalid explicit id.
 # Valid ids are positive; `0` means "not persisted yet" (auto-assign).
-class InvalidId < AError
+class EInvalidId < AError
 
-  def initialize(model : String, id : Int64)
+  def initialize(model : String, id : UInt64)
     super( "invalid id #{id} for #{model} — ids must be positive" )
   end
 
 end
+
 
 end
