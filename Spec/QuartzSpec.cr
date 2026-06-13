@@ -1,6 +1,7 @@
 require "./SpecHelper"
 require "./Quartz/ModelSpec"
 require "./Quartz/ManagerSpec"
+require "./Quartz/RelationsSpec"
 require "./Quartz/ReflectionSpec"
 require "./Quartz/ErrorsSpec"
 require "./Quartz/ReplSpec"

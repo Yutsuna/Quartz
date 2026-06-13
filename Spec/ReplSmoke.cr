@@ -1,11 +1,18 @@
-# REPL smoke scenario, executed by `Spec/Quartz/ReplSpec.cr` through
-# `crystal i` to guard the project's headline requirement: everything must
-# work in the interpreter. Keep output assertions in sync with ReplSpec.
 require "../Source/Quartz"
 
 class ReplUser < Quartz::AModel
   field name : String
   field age : Int32 = 18
+end
+
+class ReplAuthor < Quartz::AModel
+  field name : String
+  has_many books : ReplBook, foreign_key: author_id
+end
+
+class ReplBook < Quartz::AModel
+  field title : String
+  belongs_to author : ReplAuthor
 end
 
 user = ReplUser.objects.create(name: "Léo", age: 24)
@@ -17,3 +24,8 @@ puts ReplUser.objects.where { |u| u.age > 20 }.size
 puts user.to_h
 puts ReplUser.fields
 puts Quartz.model_names
+
+author = ReplAuthor.objects.create(name: "Léo")
+book = ReplBook.objects.create(title: "Crystal", author_id: author.id)
+puts book.author.inspect
+puts author.books.size
