@@ -39,6 +39,25 @@ module Quartz
 
     #--------------------------------------------------------------------------
 
+    # Runs this record's validations into `errors`.
+    # Overridden per class by the `finished` hook when validations are declared
+    protected def _quartz_validate( errors : Quartz::Errors ) : Nil
+    end
+
+    # Validation errors for this record, recomputed on each call.
+    def errors : Quartz::Errors
+      errs = Quartz::Errors.new
+      _quartz_validate( errs )
+      errs
+    end
+
+    # Whether the record passes every declared validation.
+    def valid? : Bool
+      errors.empty?
+    end
+
+    #--------------------------------------------------------------------------
+
     macro inherited
       # Macro-time registry of the fields declared directly on this class, filled by `field`.
       # Constant mutation at macro time is the established idiom (Granite, Avram).
@@ -46,6 +65,14 @@ module Quartz
       # Unlike runtime side effects emitted from `inherited`, it works in the interpreter.
       # The `finished` hook below merges it with every ancestor registry.
       QUARTZ_FIELDS = [] of Nil
+
+      # Seed override that begins this class's validation chain by deferring to
+      # the ancestor chain. Each `validates` / `validate` (see `Validations.cr`)
+      # redefines `_quartz_validate` and chains to here with `previous_def`, so
+      # ancestor rules run via `super` and own rules accumulate in order.
+      protected def _quartz_validate( errors : Quartz::Errors ) : Nil
+        super
+      end
 
       {% unless @type.abstract? %}
         # Per-class manager instance. A constant (not a class var) because
@@ -153,6 +180,14 @@ module Quartz
           # id on first save.
           def save : self
             \{{@type}}.objects.store( self )
+          end
+
+          # Validates, then persists. Raises `Quartz::EValidation`
+          # (carrying the `errors`) when the record is invalid.
+          def save! : self
+            errs = errors
+            raise Quartz::EValidation.new( \{{@type.name.stringify}}, errs ) unless errs.empty?
+            save
           end
 
           # Removes the record from the model's manager and resets its id,
