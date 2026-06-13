@@ -115,9 +115,33 @@ module Quartz
       all.find { |record| _matches?( record, **args ) }
     end
 
-    # Returns every record for which the block is truthy.
+    # Returns every record for which the block is truthy (eager `Array`).
+    # For a lazy, chainable equivalent see `#filter` / `#query`.
     def where( & : TInstance -> Bool ) : Array( TInstance )
       all.select { |record| yield record }
+    end
+
+    #--------------------------------------------------------------------------
+
+    # A lazy `QuerySet` over every record — the canonical query entry point.
+    # The set re-reads `all` on each terminal call, reflecting live state.
+    def query : QuerySet( TInstance )
+      QuerySet( TInstance ).new( -> { all } )
+    end
+
+    # Lazy, chainable filter (the composable sibling of `#where`).
+    def filter( & block : TInstance -> Bool ) : QuerySet( TInstance )
+      query.filter( &block )
+    end
+
+    # Lazy, chainable inverse filter.
+    def exclude( & block : TInstance -> Bool ) : QuerySet( TInstance )
+      query.exclude( &block )
+    end
+
+    # Lazy, chainable ordering by the key the block returns.
+    def order_by( reverse : Bool = false, & block : TInstance -> _ ) : QuerySet( TInstance )
+      query.order_by( reverse, &block )
     end
 
     # Oldest stored record, or `nil` when empty.
