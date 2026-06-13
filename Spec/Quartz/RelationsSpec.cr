@@ -76,8 +76,6 @@ describe "Quartz relationships" do
     end
 
     it "derives the foreign key from the owner class name by default" do
-      # Single-word class names: `has_many books : Book` derives `author_id`,
-      # which `belongs_to author : Author` provides — they meet by convention.
       result = quartz_compile(<<-CRYSTAL)
         class Author < Quartz::AModel
           field name : String

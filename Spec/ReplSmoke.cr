@@ -15,6 +15,11 @@ class ReplBook < Quartz::AModel
   belongs_to author : ReplAuthor
 end
 
+class ReplAccount < Quartz::AModel
+  field email : String = ""
+  validates email, presence: true
+end
+
 user = ReplUser.objects.create(name: "Léo", age: 24)
 puts user.inspect
 puts ReplUser.objects.create(name: "Bob").age
@@ -29,3 +34,6 @@ author = ReplAuthor.objects.create(name: "Léo")
 book = ReplBook.objects.create(title: "Crystal", author_id: author.id)
 puts book.author.inspect
 puts author.books.size
+
+puts ReplAccount.new(email: "").valid?
+puts ReplAccount.new(email: "x@y.z").errors.empty?

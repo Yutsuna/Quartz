@@ -53,6 +53,24 @@ class FSpecEbook < FSpecBook
   field format : String = "epub"
 end
 
+class FSpecAccount < Quartz::AModel
+  field email    : String = ""
+  field nickname : String = ""
+  field age      : Int32  = 0
+
+  validates email,    presence: true
+  validates nickname, length: {min: 2, max: 10}
+  validate do |errors|
+    errors.add("age", "must be adult") if age < 18
+  end
+end
+
+# Subclass adds its own rule, exercising `super`-chained validation inheritance.
+class FSpecPremiumAccount < FSpecAccount
+  field referral : String = ""
+  validates referral, presence: true
+end
+
 def quartz_spec_reset : Nil
   FSpecUser .objects.clear
   FSpecPost.objects.clear
@@ -64,6 +82,8 @@ def quartz_spec_reset : Nil
   FSpecLibrary.objects.clear
   FSpecShelvedBook.objects.clear
   FSpecEbook.objects.clear
+  FSpecAccount.objects.clear
+  FSpecPremiumAccount.objects.clear
 end
 
 def quartz_compile( body : String ) : { output: String, success: Bool }
