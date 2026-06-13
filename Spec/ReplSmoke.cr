@@ -37,3 +37,6 @@ puts author.books.size
 
 puts ReplAccount.new(email: "").valid?
 puts ReplAccount.new(email: "x@y.z").errors.empty?
+
+ReplUser.objects.create(name: "Max", age: 40)
+puts ReplUser.objects.filter { |u| u.age > 18 }.order_by { |u| u.age }.count

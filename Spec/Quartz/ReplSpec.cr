@@ -22,5 +22,6 @@ describe "crystal i compatibility" do
     lines.should contain("1")
     lines.should contain("false")
     lines.should contain("true")
+    lines.should contain("2")
   end
 end

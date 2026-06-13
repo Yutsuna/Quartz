@@ -190,7 +190,7 @@ describe Quartz::AModel do
       admin.to_h.should eq({"id" => 0_i64, "name" => "Léo", "age" => 24, "role" => "root"})
     end
 
-    it "supports Django-style abstract bases" do
+    it "supports abstract bases" do
       FSpecArticle.fields.should eq(["created_at", "title"])
       FSpecArticle.new(title: "Hello").created_at.should eq("now")
     end
