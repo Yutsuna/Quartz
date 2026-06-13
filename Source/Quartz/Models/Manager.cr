@@ -123,24 +123,24 @@ module Quartz
 
     #--------------------------------------------------------------------------
 
-    # A lazy `QuerySet` over every record — the canonical query entry point.
+    # A lazy `FQuerySet` over every record — the canonical query entry point.
     # The set re-reads `all` on each terminal call, reflecting live state.
-    def query : QuerySet( TInstance )
-      QuerySet( TInstance ).new( -> { all } )
+    def query : FQuerySet( TInstance )
+      FQuerySet( TInstance ).new( -> { all } )
     end
 
     # Lazy, chainable filter (the composable sibling of `#where`).
-    def filter( & block : TInstance -> Bool ) : QuerySet( TInstance )
+    def filter( & block : TInstance -> Bool ) : FQuerySet( TInstance )
       query.filter( &block )
     end
 
     # Lazy, chainable inverse filter.
-    def exclude( & block : TInstance -> Bool ) : QuerySet( TInstance )
+    def exclude( & block : TInstance -> Bool ) : FQuerySet( TInstance )
       query.exclude( &block )
     end
 
     # Lazy, chainable ordering by the key the block returns.
-    def order_by( reverse : Bool = false, & block : TInstance -> _ ) : QuerySet( TInstance )
+    def order_by( reverse : Bool = false, & block : TInstance -> _ ) : FQuerySet( TInstance )
       query.order_by( reverse, &block )
     end
 
