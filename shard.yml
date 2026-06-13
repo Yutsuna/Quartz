@@ -1,11 +1,11 @@
-name: quartz
+name: Quartz
 version: 0.1.0
 
 authors:
   - Yutsuna
 
 targets:
-  quartz:
+  Quartz:
     main: Source/Quartz.cr
 
 krystal:
