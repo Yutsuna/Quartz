@@ -39,6 +39,8 @@ puts ReplUser.objects.where { |u| u.age > 20 }.size
 puts user.to_h
 puts ReplUser.fields
 puts Quartz.model_names
+puts user.to_json
+puts ReplUser.from_json(%({"name":"Bob","age":30})).inspect
 
 author = ReplAuthor.objects.create(name: "Léo")
 book = ReplBook.objects.create(title: "Crystal", author_id: author.id)
