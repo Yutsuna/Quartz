@@ -25,10 +25,6 @@ class FSpecArticle < FSpecTimestamped
   field title : String
 end
 
-# The `FSpec` prefix makes the underscored class name (`f_spec_author_id`)
-# differ from the `belongs_to author` foreign key, so the fixtures pin the
-# foreign key explicitly. The bare-default derivation is covered by a
-# `quartz_compile` test with single-word class names in RelationsSpec.
 class FSpecAuthor < Quartz::AModel
   field name : String
   has_many books : FSpecBook, foreign_key: author_id
@@ -65,10 +61,30 @@ class FSpecAccount < Quartz::AModel
   end
 end
 
-# Subclass adds its own rule, exercising `super`-chained validation inheritance.
 class FSpecPremiumAccount < FSpecAccount
   field referral : String = ""
   validates referral, presence: true
+end
+
+class FSpecHooked < Quartz::AModel
+  field name  : String        = ""
+  field trace : Array(String) = [] of String
+
+  before_save   { trace << "before_save" }
+  after_save    { trace << "after_save" }
+  before_create { trace << "before_create" }
+  after_create  { trace << "after_create" }
+  before_delete { trace << "before_delete" }
+  after_delete  { trace << "after_delete" }
+end
+
+class FSpecHookedChild < FSpecHooked
+  before_save { trace << "child_before_save" }
+end
+
+class FSpecNormalized < Quartz::AModel
+  field name : String = ""
+  before_save { self.name = name.strip.downcase }
 end
 
 def quartz_spec_reset : Nil
@@ -84,6 +100,9 @@ def quartz_spec_reset : Nil
   FSpecEbook.objects.clear
   FSpecAccount.objects.clear
   FSpecPremiumAccount.objects.clear
+  FSpecHooked.objects.clear
+  FSpecHookedChild.objects.clear
+  FSpecNormalized.objects.clear
 end
 
 def quartz_compile( body : String ) : { output: String, success: Bool }

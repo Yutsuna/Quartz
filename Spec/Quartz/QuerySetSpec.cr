@@ -1,6 +1,6 @@
 require "../SpecHelper"
 
-describe Quartz::QuerySet do
+describe Quartz::FQuerySet do
   before_each { quartz_spec_reset }
 
   describe "laziness" do

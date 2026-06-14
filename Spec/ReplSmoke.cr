@@ -20,6 +20,11 @@ class ReplAccount < Quartz::AModel
   validates email, presence: true
 end
 
+class ReplHooked < Quartz::AModel
+  field name : String = ""
+  before_save { self.name = name.upcase }
+end
+
 user = ReplUser.objects.create(name: "Léo", age: 24)
 puts user.inspect
 puts ReplUser.objects.create(name: "Bob").age
@@ -40,3 +45,5 @@ puts ReplAccount.new(email: "x@y.z").errors.empty?
 
 ReplUser.objects.create(name: "Max", age: 40)
 puts ReplUser.objects.filter { |u| u.age > 18 }.order_by { |u| u.age }.count
+
+puts ReplHooked.objects.create(name: "bob").name
