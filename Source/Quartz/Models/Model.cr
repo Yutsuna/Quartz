@@ -211,6 +211,45 @@ module Quartz
           hasher
         end
 
+        # JSON object of the record: `"id"` first, then every field. Defining the
+        # `JSON::Builder` overload gives `to_json` (String) and `to_json(io)` for
+        # free via the stdlib `Object` overloads.
+        def to_json( json : JSON::Builder ) : Nil
+          json.object do
+            json.field( "id", @id )
+            \{% for d in fields %}
+            json.field( \{{d.var.stringify}}, @\{{d.var}} )
+            \{% end %}
+          end
+        end
+
+        # Builds a transient record (id 0 unless an `"id"` key is present) from a
+        # JSON string. Absent keys fall back to the field's default; an absent
+        # required field (one with no default) raises `Quartz::EDeserialization`.
+        # Does not persist or validate, mirroring `new`.
+        def self.from_json( string : String ) : self
+          any = JSON.parse( string )
+          record = new(
+            \{% for d in fields %}
+            \{{d.var}}: (
+              if node = any[ \{{d.var.stringify}} ]?
+                ( \{{d.type}} ).new( JSON::PullParser.new( node.to_json ) )
+              else
+                \{% if d.value.is_a?( Nop ) %}
+                raise Quartz::EDeserialization.new( \{{@type.name.stringify}}, \{{d.var.stringify}} )
+                \{% else %}
+                \{{d.value}}
+                \{% end %}
+              end
+            ),
+            \{% end %}
+          )
+          if id_node = any[ "id" ]?
+            record.id = id_node.as_i64.to_u64
+          end
+          record
+        end
+
         #--------------------------------------------------------------------------
 
         \{% unless @type.abstract? %}
