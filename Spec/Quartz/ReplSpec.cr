@@ -17,12 +17,13 @@ describe "crystal i compatibility" do
     lines.should contain("1")
     lines.should contain(%({"id" => 1, "name" => "Léo", "age" => 24}))
     lines.should contain(%(["name", "age"]))
-    lines.should contain(%(["ReplUser", "ReplAuthor", "ReplBook", "ReplAccount", "ReplHooked"]))
+    lines.should contain(%(["ReplUser", "ReplAuthor", "ReplBook", "ReplAccount", "ReplHooked", "ReplStamped"]))
     lines.should contain(%(#<ReplAuthor id=1 name="Léo">))
     lines.should contain("1")
     lines.should contain("false")
     lines.should contain("true")
     lines.should contain("2")
     lines.should contain("BOB")
+    lines.should contain("Time")
   end
 end

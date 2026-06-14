@@ -87,6 +87,11 @@ class FSpecNormalized < Quartz::AModel
   before_save { self.name = name.strip.downcase }
 end
 
+class FSpecStamped < Quartz::AModel
+  field title : String = ""
+  timestamps
+end
+
 def quartz_spec_reset : Nil
   FSpecUser .objects.clear
   FSpecPost.objects.clear
@@ -103,6 +108,7 @@ def quartz_spec_reset : Nil
   FSpecHooked.objects.clear
   FSpecHookedChild.objects.clear
   FSpecNormalized.objects.clear
+  FSpecStamped.objects.clear
 end
 
 def quartz_compile( body : String ) : { output: String, success: Bool }

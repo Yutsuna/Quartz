@@ -25,6 +25,11 @@ class ReplHooked < Quartz::AModel
   before_save { self.name = name.upcase }
 end
 
+class ReplStamped < Quartz::AModel
+  field title : String = ""
+  timestamps
+end
+
 user = ReplUser.objects.create(name: "Léo", age: 24)
 puts user.inspect
 puts ReplUser.objects.create(name: "Bob").age
@@ -47,3 +52,5 @@ ReplUser.objects.create(name: "Max", age: 40)
 puts ReplUser.objects.filter { |u| u.age > 18 }.order_by { |u| u.age }.count
 
 puts ReplHooked.objects.create(name: "bob").name
+
+puts ReplStamped.objects.create(title: "x").created_at.class
