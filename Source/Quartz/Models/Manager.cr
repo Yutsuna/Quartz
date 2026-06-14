@@ -33,9 +33,16 @@ module Quartz
 
     # Persists a record, assigning the next id if it has none yet.
     #
-    # Used by `AModel#save`.
+    # `before_save` -> (`before_create` if new) → store → (`after_create` if new)
+    # `after_save`  -> The adapter's own `store` is the raw, hook-free primitive.
     def store( record : TInstance ) : TInstance
+      new_record = !record.persisted?
+      record._quartz_before_save
+      record._quartz_before_create if new_record
       @adapter.store( record )
+      record._quartz_after_create if new_record
+      record._quartz_after_save
+      record
     end
 
     def all : Array( TInstance )

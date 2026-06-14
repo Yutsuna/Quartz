@@ -44,6 +44,28 @@ module Quartz
     protected def _quartz_validate( errors : Quartz::Errors ) : Nil
     end
 
+    # Lifecycle callback chains (see `Callbacks.cr`). No-op base versions so the
+    # `super`-chained per-class seeds (emitted by `macro inherited`) bottom out
+    # here for models that declare no callbacks. Public (despite the internal
+    # `_quartz_` prefix) because `FManager#store` fires the save hooks.
+    def _quartz_before_create : Nil
+    end
+
+    def _quartz_after_create : Nil
+    end
+
+    def _quartz_before_save : Nil
+    end
+
+    def _quartz_after_save : Nil
+    end
+
+    def _quartz_before_delete : Nil
+    end
+
+    def _quartz_after_delete : Nil
+    end
+
     # Validation errors for this record, recomputed on each call.
     def errors : Quartz::Errors
       errs = Quartz::Errors.new
@@ -73,6 +95,16 @@ module Quartz
       protected def _quartz_validate( errors : Quartz::Errors ) : Nil
         super
       end
+
+      # Per-class seeds that begin each lifecycle-callback chain by deferring to
+      # the ancestor chain. Each `before_*` / `after_*` macro (see `Callbacks.cr`)
+      # redefines its hook with `previous_def`, so ancestor hooks run via `super`
+      # and own hooks accumulate in declaration order — exactly like validations.
+      {% for hook in %w(before_create after_create before_save after_save before_delete after_delete) %}
+        def _quartz_{{hook.id}} : Nil
+          super
+        end
+      {% end %}
 
       {% unless @type.abstract? %}
         # Per-class manager instance. A constant (not a class var) because
@@ -177,13 +209,15 @@ module Quartz
 
         \{% unless @type.abstract? %}
           # Persists the record through the model's manager, assigning an
-          # id on first save.
+          # id on first save. The save lifecycle callbacks (see `Callbacks.cr`)
+          # fire inside `FManager#store`, the shared persist choke point.
           def save : self
             \{{@type}}.objects.store( self )
           end
 
           # Validates, then persists. Raises `Quartz::EValidation`
           # (carrying the `errors`) when the record is invalid.
+          # Inherits `save`'s callbacks (fired after validation passes).
           def save! : self
             errs = errors
             raise Quartz::EValidation.new( \{{@type.name.stringify}}, errs ) unless errs.empty?
@@ -191,10 +225,15 @@ module Quartz
           end
 
           # Removes the record from the model's manager and resets its id,
-          # so `persisted?` becomes `false` again.
+          # so `persisted?` becomes `false` again. Fires `before_delete` before
+          # the removal and `after_delete` only when a record was actually removed.
           def delete : Bool
+            _quartz_before_delete
             deleted = \{{@type}}.objects.delete(@id)
-            @id = 0_i64 if deleted
+            if deleted
+              @id = 0_i64
+              _quartz_after_delete
+            end
             deleted
           end
         \{% end %}
