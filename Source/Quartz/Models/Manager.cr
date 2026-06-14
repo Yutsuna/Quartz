@@ -1,98 +1,87 @@
+require "../Adapters/Adapter"
+require "../Adapters/Memory"
+require "../Query/QuerySet"
+
+
 module Quartz
 
 
-  # In-memory record store
+  # Query facade over a pluggable storage backend.
   #
   # One instance exists per model class (created by `AModel.inherited`).
-  # Records are kept in an id-indexed hash.
-  # ids are assigned sequentially on first store.
+  # `FManager` owns the *query* API; physical persistence is delegated to an
+  # `FAdapter`, injected at construction and defaulting to `FMemoryAdapter`.
+  # Swapping the adapter swaps the backend with no change to the manager,
+  # the models, or the specs.
   #
   # ```
   # User.objects.create( name: "Léo", age: 24 )
   # User.objects.all
   # User.objects.find(1)
   # User.objects.where { |u| u.age > 20 }
+  # User.objects.filter { |u| u.age > 20 }.order_by { |u| u.age }   # lazy
   # ```
-  #
-  # Contract on `TInstance`
-  #
-  #   `TInstance` is expected to be a `Quartz::AModel` subclass.
-  #   The manager relies on the API its macros generate:
-  #   `TInstance.new(**args)`, `TInstance.fields`, `#id`/`#id=`
-  #   (with `0` meaning "not persisted") and `#[](String)`.
-  #
-  # Sharing and thread safety:
-  #
-  #   The *index* (hash + id sequence) is synchronized with a `Mutex`
-  #   query esults hold live references to the stored records (identity-map semantics),
-  #   the records themselves are plain mutable objects with no synchronization of their own.
-  #
-  #   Mutating a returned record is visible to every holder of the reference.
-  #   persist field changes with `#save`.
-  #
-  # NOTE:
-  #   Reassigning `record.id` by hand is unsupported.
-  #   store` re-keys the record, but stale reads may occur in between.
   class FManager( TInstance )
 
     #--------------------------------------------------------------------------
 
-    def initialize
-      @records = {} of UInt64 => TInstance
-      @next_id = 1_u64
-      @mutex = Mutex.new
+    def initialize( @adapter : FAdapter( TInstance ) = FMemoryAdapter( TInstance ).new )
     end
 
     #--------------------------------------------------------------------------
+    # Storage primitives: delegated to the adapter.
+
+    # Persists a record, assigning the next id if it has none yet.
+    #
+    # Used by `AModel#save`.
+    def store( record : TInstance ) : TInstance
+      @adapter.store( record )
+    end
+
+    def all : Array( TInstance )
+      @adapter.all
+    end
+
+    def count : Int32
+      @adapter.count
+    end
+
+    # Returns the record with the given id, or `nil`.
+    def find?( id : UInt64 ) : TInstance?
+      @adapter.find?( id )
+    end
+
+    # Oldest stored record, or `nil` when empty.
+    def first? : TInstance?
+      @adapter.first?
+    end
+
+    # Most recently inserted record, or `nil` when empty.
+    def last? : TInstance?
+      @adapter.last?
+    end
+
+    # Removes the record with the given id. Returns `false` if absent.
+    def delete( id : UInt64 ) : Bool
+      @adapter.delete( id )
+    end
+
+    # Removes every record and resets the id sequence. Mainly for specs.
+    def clear : Nil
+      @adapter.clear
+    end
+
+    #--------------------------------------------------------------------------
+    # Derived query API: composed on top of the storage primitives.
 
     # Instantiates a record from keyword arguments and persists it.
     def create( **args ) : TInstance
       store( TInstance.new( **args ) )
     end
 
-    # Persists a record, assigning the next id if it has none yet.
-    #
-    # Used by `AModel#save`.
-    # Storing a record under an id that is already taken replaces the previous record.
-    #
-    # Raises:
-    #   `EInvalidId` for a negative explicit id.
-    def store( record : TInstance ) : TInstance
-      @mutex.synchronize {
-
-        if ! record.persisted?
-          record.id = @next_id
-          @next_id += 1
-
-        elsif record.id >= @next_id
-          # INFO: advance the sequence before inerting
-          # -> prevents a collision if the record is already present in the store
-          # -> prevents an overflow from leaving the store in a broken state
-          @next_id = record.id + 1
-        end
-        # Drop any stale entry left behind by a manual id reassignment.
-        @records.reject! { |key, existing| key != record.id && existing.same?( record ) }
-        @records[ record.id ] = record
-      }
-      record
-    end
-
-    def all : Array( TInstance )
-      @mutex.synchronize { @records.values }
-    end
-
-    def count : Int32
-      @mutex.synchronize { @records.size }
-    end
-
     # Returns the record with the given id, or raises `ERecordNotFound`.
     def find( id : UInt64 ) : TInstance
-      find?(id ) || raise ERecordNotFound.new( TInstance.name, id )
-    end
-
-    # Returns the record with the given id, or `nil`.
-    def find?( id : UInt64 ) : TInstance?
-      @mutex.synchronize { @records[id]? }
+      find?( id ) || raise ERecordNotFound.new( TInstance.name, id )
     end
 
     # Returns the first record whose fields match every given keyword
@@ -142,35 +131,6 @@ module Quartz
     # Lazy, chainable ordering by the key the block returns.
     def order_by( reverse : Bool = false, & block : TInstance -> _ ) : FQuerySet( TInstance )
       query.order_by( reverse, &block )
-    end
-
-    # Oldest stored record, or `nil` when empty.
-    def first? : TInstance?
-      @mutex.synchronize { @records.empty? ? nil : @records.first_value }
-    end
-
-    # Most recently inserted record, or `nil` when empty.
-    def last? : TInstance?
-      @mutex.synchronize {
-        last = nil
-        @records.each_value { |record| last = record }
-        last
-      }
-    end
-
-    # Removes the record with the given id. Returns `false` if absent.
-    def delete(id : UInt64) : Bool
-      @mutex.synchronize { !@records.delete( id ).nil? }
-    end
-
-    # Removes every record and resets the id sequence. Mainly for specs:
-    # freed ids are reused afterwards, so never call it while stale ids are
-    # held elsewhere.
-    def clear : Nil
-      @mutex.synchronize {
-        @records.clear
-        @next_id = 1_u64
-      }
     end
 
     #--------------------------------------------------------------------------
