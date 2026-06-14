@@ -144,8 +144,14 @@ module Quartz
 
         # Keyword-only constructor over every field (inherited ones included)
         # Defaults declared on `field` apply.
-        def initialize(\{% unless fields.empty? %}*, \{% end %}\{% for d in fields %} @\{{d.var}} : \{{d.type}}\{% if d.value %} = \{{d.value}}\{% end %}, \{% end %})
+        def initialize(
+          \{% unless fields.empty? %}*, \{% end %}
+          \{% for d in fields %}
+          @\{{d.var}} : \{{d.type}}\{% unless d.value.is_a?( Nop ) %} = \{{d.value}}\{% end %},
+          \{% end %}
+        )
         end
+
 
         # Field names of this model (ancestors included), root-most first.
         def self.fields : Array( String )
