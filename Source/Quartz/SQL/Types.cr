@@ -22,7 +22,7 @@ module Quartz
     }
 
     def self.to_sql_type( type : String )
-      SQL_TYPE_MAP[ type ] || "TEXT"
+      SQL_TYPE_MAP[ type ]? || "TEXT"
     end
 
     def self.to_crystal_type( type : String )
