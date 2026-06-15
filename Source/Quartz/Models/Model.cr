@@ -81,6 +81,53 @@ module Quartz
     end
 
     #--------------------------------------------------------------------------
+    # Type-safe push-down query entry points. Defined on `AModel`, so every
+    # concrete subclass inherits them and `@type` resolves to that subclass at
+    # the call site (`User.where(...)`). They reference the per-field, typed
+    # `_q_<field>` helpers generated in the `finished` hook, so a wrong value
+    # type or an unknown field name is a **compile-time** error.
+
+    # Filters records. **Keyword** form -> a lazy, chainable `FQuerySet` over a
+    # declarative spec the adapter pushes down; each value is a native Crystal
+    # value (raw `=`, `Range` `>=`/`<`/`BETWEEN`, `Array` `IN`, op-`NamedTuple`
+    # `{gt: ...}`). **Block** form -> the eager `Array` of matching records.
+    #
+    # ```
+    # User.where( age: 18.. )                      # >= 18  (push-down)
+    # User.where( role: ["admin", "mod"] )         # IN
+    # User.where( age: {gt: 18} ).order_by( :age ) # chainable
+    # User.where { |u| u.age > 20 }                # Array (block form)
+    # ```
+    macro where( **opts, &block )
+      {% if block %}
+        {{@type}}.objects.where { |{{ block.args.splat }}| {{ block.body }} }
+      {% else %}
+        %mgr = {{@type}}.objects
+        %spec = Quartz::FQuerySpec( {{@type}} ).new
+        {% for key, value in opts %}
+          {{@type}}._q_{{key.id}}( %spec, {{value}}, false )
+        {% end %}
+        Quartz::FQuerySet( {{@type}} ).new( %spec, ->( s : Quartz::FQuerySpec( {{@type}} ) ) { %mgr.fetch( s ) } )
+      {% end %}
+    end
+
+    # Inverse filter (the negated sibling of `where`). **Keyword** form -> a lazy
+    # push-down `FQuerySet` with each condition negated; **block** form -> a lazy
+    # `FQuerySet` rejecting the matching records.
+    macro exclude( **opts, &block )
+      {% if block %}
+        {{@type}}.objects.exclude { |{{ block.args.splat }}| {{ block.body }} }
+      {% else %}
+        %mgr = {{@type}}.objects
+        %spec = Quartz::FQuerySpec( {{@type}} ).new
+        {% for key, value in opts %}
+          {{@type}}._q_{{key.id}}( %spec, {{value}}, true )
+        {% end %}
+        Quartz::FQuerySet( {{@type}} ).new( %spec, ->( s : Quartz::FQuerySpec( {{@type}} ) ) { %mgr.fetch( s ) } )
+      {% end %}
+    end
+
+    #--------------------------------------------------------------------------
 
     macro inherited
       # Macro-time registry of the fields declared directly on this class, filled by `field`.
@@ -284,6 +331,62 @@ module Quartz
               _quartz_after_delete
             end
             deleted
+          end
+
+          #----------------------------------------------------------------------
+          # Type-safe push-down query helpers (consumed by `FManager#where` /
+          # `FQuerySet#where`). One typed `_q_<field>` per field accepts only
+          # values compatible with the field's type — a wrong type or an unknown
+          # field name is a *compile-time* error.
+
+          \{% for d in fields %}
+            \{% rt = d.type.resolve %}
+            \{% nilable = rt.union? && rt.union_types.any? { |t| t.stringify == "Nil" } %}
+            \{% base = rt.union? ? rt.union_types.find { |t| t.stringify != "Nil" } : rt %}
+            \{% bn = base.stringify %}
+            \{% comparable = !nilable && %w(Int8 Int16 Int32 Int64 UInt64 Float32 Float64 String Time).includes?( bn ) %}
+            \{% t = d.type %}
+            \{% vtype = "#{t} | ::Array(#{t}) | ::NamedTuple(eq: #{t}) | ::NamedTuple(ne: #{t})" %}
+            \{% if comparable %}\{% vtype = vtype + " | ::Range(#{t}?, #{t}?) | ::NamedTuple(gt: #{t}) | ::NamedTuple(gte: #{t}) | ::NamedTuple(lt: #{t}) | ::NamedTuple(lte: #{t})" %}\{% end %}
+
+            # Adds a condition on `\{{d.var}}` to `spec`. Accepts a raw value,
+            # an `Array` (`IN`) or an op-`NamedTuple`; comparable fields also
+            # accept a `Range` and ordering operators. Type-checked at compile time.
+            def self._q_\{{d.var}}(
+              spec : Quartz::FQuerySpec( self ),
+              value : \{{vtype.id}},
+              negated : Bool
+            ) : Nil
+              spec.add( \{{d.var.stringify}}, value, negated ) { |record| record.\{{d.var}} }
+            end
+          \{% end %}
+
+          # Returns a sorter for `column` (the in-memory ordering primitive the
+          # default `FAdapter#fetch` uses). Only non-nilable comparable columns
+          # are sortable; `id` is always sortable.
+          def self._quartz_sorter( column : String, reverse : Bool ) : Proc( Array( self ), Array( self ) )
+            case column
+            when "id"
+              ->( arr : Array( self ) ) {
+                sorted = arr.sort_by( &.id )
+                reverse ? sorted.reverse! : sorted
+              }
+            \{% for d in fields %}
+              \{% rt = d.type.resolve %}
+              \{% nilable = rt.union? && rt.union_types.any? { |t| t.stringify == "Nil" } %}
+              \{% base = rt.union? ? rt.union_types.find { |t| t.stringify != "Nil" } : rt %}
+              \{% bn = base.stringify %}
+              \{% if !nilable && %w(Int8 Int16 Int32 Int64 UInt64 Float32 Float64 String Time).includes?( bn ) %}
+                when \{{d.var.stringify}}
+                  ->( arr : Array( self ) ) {
+                    sorted = arr.sort_by( &.\{{d.var}} )
+                    reverse ? sorted.reverse! : sorted
+                  }
+              \{% end %}
+            \{% end %}
+            else
+              raise Quartz::EUnknownField.new( \{{@type.name.stringify}}, column )
+            end
           end
 
           #----------------------------------------------------------------------
