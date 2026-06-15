@@ -92,6 +92,38 @@ describe "Quartz validations" do
     end
   end
 
+  describe "#save" do
+    it "returns false without persisting when invalid" do
+      account = FSpecAccount.new(email: "", nickname: "leo", age: 20)
+      account.save.should be_false
+      account.persisted?.should be_false
+      FSpecAccount.objects.count.should eq(0)
+    end
+
+    it "returns true and persists when valid" do
+      account = FSpecAccount.new(email: "x@y.z", nickname: "leo", age: 20)
+      account.save.should be_true
+      account.persisted?.should be_true
+      FSpecAccount.objects.find(account.id).should eq(account)
+    end
+  end
+
+  describe "FManager#create" do
+    it "raises EValidation without persisting when invalid" do
+      ex = expect_raises(Quartz::EValidation) do
+        FSpecAccount.objects.create(email: "", nickname: "leo", age: 20)
+      end
+      ex.errors["email"].should eq(["can't be blank"])
+      FSpecAccount.objects.count.should eq(0)
+    end
+
+    it "persists and returns the record when valid" do
+      account = FSpecAccount.objects.create(email: "x@y.z", nickname: "leo", age: 20)
+      account.persisted?.should be_true
+      FSpecAccount.objects.find(account.id).should eq(account)
+    end
+  end
+
   describe "inheritance" do
     it "runs both inherited and own validations" do
       account = FSpecPremiumAccount.new(email: "", nickname: "leo", age: 20, referral: "")
