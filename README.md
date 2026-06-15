@@ -1,55 +1,83 @@
 # Quartz
 
-ORM REPL Interactive-friendly written in Crystal
+Quartz is a Crystal ORM built around three goals: a compact model DSL, REPL-safe
+macros, and a storage layer that can be swapped without changing the model API.
+
+## Documentation
+
+- [Architecture](Doc/Architecture.md)
+
+## Quick start
 
 ```crystal
-Crystal interpreter 1.20.2 (2026-05-16).
-EXPERIMENTAL SOFTWARE: if you find a bug, please consider opening an issue in
-https://github.com/crystal-lang/crystal/issues/new/
-icr:1> require "./Source/**"
- => nil
-icr:2> class User < Quartz::AModel
-icr:3>   field name : String
-icr:4>   field age : Int32
-icr:5> end
- => nil
-icr:6> User.objects.create(name: "Léo", age: 24)
- => #<User id=1 name="Léo" age=24>
-icr:7> User.objects.create(name: "Jacques", age: 53)
- => #<User id=2 name="Jacques" age=53>
-icr:8> User.objects.create(name: "Xavier", age: 16)
- => #<User id=3 name="Xavier" age=16>
-icr:9>  adults = User.objects
-icr:10>   .filter { |u| u.age >= 18 }
-icr:11>   .exclude { |u| u.name == "admin" }
-icr:12>   .order_by { |u| u.age }
-icr:13>   .limit(10)
- => #<Quartz::QuerySet(User):0x7ff624a577e0 @source=#<Proc(Array(User)):0x7ff624a54280:closure>>
-icr:14> adults.to_a
- => [#<User id=1 name="Léo" age=24>, #<User id=2 name="Jacques" age=53>]
-icr:15>
+require "./Source/Quartz"
+
+class Author < Quartz::AModel
+  field name : String
+  has_many books : Book
+end
+
+class Book < Quartz::AModel
+  field title : String = ""
+  belongs_to author : Author
+
+  validates title, presence: true
+  before_save { self.title = title.strip }
+  timestamps
+end
+
+author = Author.objects.create(name: "Léo")
+book = Book.objects.create(title: "  Crystal in Practice  ", author_id: author.id)
+
+puts book.inspect
+puts book.author
+puts author.books
+puts Book.objects
+  .filter { |item| item.author_id == author.id }
+  .order_by { |item| item.title }
+  .to_a
 ```
 
 ## Installation
 
-TODO: Write installation instructions here
+```bash
+git clone https://github.com/Yutsuna/Quartz.git
+cd Quartz
+shards install
+```
 
-## Usage
+Quartz targets Crystal `>= 1.20.2`.
 
-TODO: Write usage instructions here
+## Build and test
 
-## Development
+We recommand you to use [**Krystal**](https://github.com/Yutsuna/Krystal) to build and test Quartz.<br>
+Krystal is a crystal compiler wrapper for big projects, really faster than `crystal build`.
 
-TODO: Write development instructions here
+```bash
+krystal
+krystal --force
+krystal --release
+krystal --spec
+```
+
+## Project layout
+
+```text
+Source/
+  Quartz.cr
+  Quartz/
+    Models/
+    Query/
+    Adapters/
+    Errors/
+Spec/
+Doc/
+```
 
 ## Contributing
 
-1. Fork it (<https://github.com/your-github-user/quartz/fork>)
-2. Create your feature branch (`git checkout -b my-new-feature`)
-3. Commit your changes (`git commit -am 'Add some feature'`)
-4. Push to the branch (`git push origin my-new-feature`)
-5. Create a new Pull Request
-
-## Contributors
-
-- [your-name-here](https://github.com/your-github-user) - creator and maintainer
+1. Fork the repository.
+2. Create a feature branch.
+3. Commit your changes.
+4. Push the branch.
+5. Open a pull request.
