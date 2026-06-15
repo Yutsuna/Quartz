@@ -11,7 +11,7 @@ module Quartz
       FQuerySet( TInstance ).new( -> { src.call.select { |record| block.call( record ) } } )
     end
 
-    # Keeps only the records for which `block` is falsey
+    # Keeps only the records for which `block` is falsey.
     def exclude( & block : TInstance -> Bool ) : FQuerySet( TInstance )
       src = @source
       FQuerySet( TInstance ).new( -> { src.call.reject { |record| block.call( record ) } } )
@@ -27,16 +27,38 @@ module Quartz
       } )
     end
 
-    # Keeps at most the first `n` records.
+    # Keeps at most the first `n` records. Pushes down to the spec when the set
+    # is spec-backed (`FManager#where`), otherwise composes in memory.
     def limit( n : Int32 ) : FQuerySet( TInstance )
+      if s = @spec
+        next_spec = s._copy
+        next_spec.limit = n
+        return FQuerySet( TInstance ).new( next_spec, fetch! )
+      end
       src = @source
       FQuerySet( TInstance ).new( -> { src.call.first( n ) } )
     end
 
-    # Skips the first `n` records.
+    # Skips the first `n` records. Pushes down to the spec when the set is
+    # spec-backed, otherwise composes in memory.
     def offset( n : Int32 ) : FQuerySet( TInstance )
+      if s = @spec
+        next_spec = s._copy
+        next_spec.offset = n
+        return FQuerySet( TInstance ).new( next_spec, fetch! )
+      end
       src = @source
       FQuerySet( TInstance ).new( -> { src.call.skip( n ) } )
+    end
+
+    # Orders a spec-backed set by `column` (push-down `ORDER BY`), ascending by
+    # default. The column is validated by the adapter's typed sorter.
+    def order_by( column : Symbol, reverse : Bool = false ) : FQuerySet( TInstance )
+      s = @spec.not_nil!
+      next_spec = s._copy
+      next_spec.order_column = column.to_s
+      next_spec.order_reverse = reverse
+      FQuerySet( TInstance ).new( next_spec, fetch! )
     end
 
   end

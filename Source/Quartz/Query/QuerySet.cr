@@ -1,3 +1,6 @@
+require "./Predicate"
+
+
 module Quartz
 
   # A `FQuerySet` wraps a single source proc `-> Array(T)` and builds a pipeline
@@ -33,7 +36,30 @@ module Quartz
 
     include Enumerable( TInstance )
 
+    # The declarative push-down query, set only on a spec-backed set
+    # (from `FManager#where` / `#exclude`). `nil` for a block/thunk pipeline.
+    getter spec : FQuerySpec( TInstance )?
+    # The adapter call that evaluates a spec; paired with `@spec`.
+    @fetch : Proc( FQuerySpec( TInstance ), Array( TInstance ) )?
+
+    # Block/thunk pipeline: composes in memory over the source proc.
     def initialize( @source : -> Array( TInstance ) )
+      @spec = nil
+      @fetch = nil
+    end
+
+    # Push-down pipeline: carries a declarative `FQuerySpec` and the adapter
+    # `fetch` that evaluates it. The source materializes by handing the spec to
+    # the adapter, so the same set works against memory or SQL.
+    def initialize( spec : FQuerySpec( TInstance ), fetch : Proc( FQuerySpec( TInstance ), Array( TInstance ) ) )
+      @spec = spec
+      @fetch = fetch
+      @source = -> { fetch.call( spec ) }
+    end
+
+    # The fetch proc, for transforms that derive a new spec-backed set.
+    protected def fetch! : Proc( FQuerySpec( TInstance ), Array( TInstance ) )
+      @fetch.not_nil!
     end
 
   end
