@@ -18,7 +18,7 @@ module Quartz
   # p = Post.objects.create( title: "Hi" )
   # p.created_at        # => set on first persist (UTC)
   # p.updated_at        # => equal to created_at on create
-  # p.save              # => later: updated_at advances, created_at unchanged
+  # p.save!             # => later: updated_at advances, created_at unchanged
   # Post.new.created_at # => nil (an unsaved record has no timestamps yet)
   # ```
   #

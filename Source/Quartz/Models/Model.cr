@@ -1,3 +1,4 @@
+require "json"
 require "./Field"
 require "./Annotations"
 
@@ -211,9 +212,8 @@ module Quartz
           hasher
         end
 
-        # JSON object of the record: `"id"` first, then every field. Defining the
-        # `JSON::Builder` overload gives `to_json` (String) and `to_json(io)` for
-        # free via the stdlib `Object` overloads.
+        # JSON object of the record: `"id"` first, then every field.
+        # Defining the `JSON::Builder` overload gives `to_json` (String) and `to_json(io)`
         def to_json( json : JSON::Builder ) : Nil
           json.object do
             json.field( "id", @id )
@@ -253,20 +253,17 @@ module Quartz
         #--------------------------------------------------------------------------
 
         \{% unless @type.abstract? %}
-          # Persists the record through the model's manager, assigning an
-          # id on first save. The save lifecycle callbacks (see `Callbacks.cr`)
-          # fire inside `FManager#store`, the shared persist choke point.
-          def save : self
-            \{{@type}}.objects.store( self )
-          end
 
           # Validates, then persists. Raises `Quartz::EValidation`
           # (carrying the `errors`) when the record is invalid.
           # Inherits `save`'s callbacks (fired after validation passes).
+          #
+          # Validates then persists the record through the model's manager, assigning an id on first save.
+          # Raises `Quartz::EValidation` (carrying the `errors`) when the record is invalid.
           def save! : self
             errs = errors
             raise Quartz::EValidation.new( \{{@type.name.stringify}}, errs ) unless errs.empty?
-            save
+            \{{@type}}.objects.store( self )
           end
 
           # Removes the record from the model's manager and resets its id,
