@@ -33,7 +33,7 @@ describe "timestamps" do
 
       sleep 1.millisecond
       record.title = "Bye"
-      record.save
+      record.save!
 
       record.created_at.should eq(created)
       record.updated_at.not_nil!.should be > record.created_at.not_nil!

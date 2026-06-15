@@ -43,7 +43,7 @@ describe "Quartz relationships" do
       book = FSpecBook.objects.create(title: "Crystal")
       book.author = author
       book.author_id.should eq(author.id)
-      book.save
+      book.save!
       FSpecBook.objects.find(book.id).author.should eq(author)
     end
   end

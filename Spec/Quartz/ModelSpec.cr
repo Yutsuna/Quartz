@@ -16,7 +16,7 @@ describe Quartz::AModel do
 
     it "accepts unicode, emoji and empty strings" do
       FSpecUser.new(name: "").name.should eq("")
-      FSpecUser.new(name: "日本語 🚀").name.should eq("日本語 🚀")
+      FSpecUser.new(name: "我爱你中国 ❤️").name.should eq("我爱你中国 ❤️")
     end
 
     it "accepts negative numeric values" do
@@ -28,30 +28,30 @@ describe Quartz::AModel do
     it "is false before save and true after" do
       user = FSpecUser.new(name: "Léo")
       user.persisted?.should be_false
-      user.save
+      user.save!
       user.persisted?.should be_true
     end
   end
 
   describe "#save" do
     it "assigns an id and stores the record" do
-      user = FSpecUser.new(name: "Léo").save
+      user = FSpecUser.new(name: "Léo").save!
       user.id.should eq(1)
       FSpecUser.objects.find(1).should eq(user)
     end
 
     it "updates in place when saved twice" do
-      user = FSpecUser.new(name: "Léo").save
+      user = FSpecUser.new(name: "Léo").save!
       user.age = 30
-      user.save
+      user.save!
       FSpecUser.objects.count.should eq(1)
       FSpecUser.objects.find(user.id).age.should eq(30)
     end
 
     it "re-keys the record after a manual id reassignment" do
-      user = FSpecUser.new(name: "Léo").save
+      user = FSpecUser.new(name: "Léo").save!
       user.id = 999_i64
-      user.save
+      user.save!
       FSpecUser.objects.count.should eq(1)
       FSpecUser.objects.find?(999).should be(user)
       FSpecUser.objects.find?(1).should be_nil
@@ -60,14 +60,14 @@ describe Quartz::AModel do
 
   describe "#delete" do
     it "removes the record and reports absence" do
-      user = FSpecUser.new(name: "Léo").save
+      user = FSpecUser.new(name: "Léo").save!
       user.delete.should be_true
       user.delete.should be_false
       FSpecUser.objects.count.should eq(0)
     end
 
     it "resets the id so the record is no longer persisted" do
-      user = FSpecUser.new(name: "Léo").save
+      user = FSpecUser.new(name: "Léo").save!
       user.delete
       user.id.should eq(0)
       user.persisted?.should be_false
@@ -118,7 +118,7 @@ describe Quartz::AModel do
     it "is false when ids differ" do
       a = FSpecUser.new(name: "Léo")
       b = FSpecUser.new(name: "Léo")
-      a.save
+      a.save!
       a.should_not eq(b)
     end
 
@@ -141,7 +141,7 @@ describe Quartz::AModel do
     it "renders a concise display form" do
       user = FSpecUser.new(name: "Léo")
       user.to_s.should eq("FSpecUser#new")
-      user.save
+      user.save!
       user.to_s.should eq("FSpecUser#1")
     end
   end
@@ -174,7 +174,7 @@ describe Quartz::AModel do
 
   describe "field-less models" do
     it "supports the whole generated API" do
-      record = FSpecEmpty.new.save
+      record = FSpecEmpty.new.save!
       FSpecEmpty.fields.should eq([] of String)
       record.to_h.should eq({"id" => 1_i64})
       record.inspect.should eq("#<FSpecEmpty id=1>")

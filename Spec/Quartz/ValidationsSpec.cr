@@ -92,14 +92,6 @@ describe "Quartz validations" do
     end
   end
 
-  describe "non-validating #save" do
-    it "still persists an invalid record (v1 behavior)" do
-      account = FSpecAccount.new(email: "", nickname: "leo", age: 20)
-      account.save
-      account.persisted?.should be_true
-    end
-  end
-
   describe "inheritance" do
     it "runs both inherited and own validations" do
       account = FSpecPremiumAccount.new(email: "", nickname: "leo", age: 20, referral: "")
@@ -122,4 +114,5 @@ describe "Quartz validations" do
       user.persisted?.should be_true
     end
   end
+
 end

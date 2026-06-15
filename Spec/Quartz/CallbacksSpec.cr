@@ -11,7 +11,7 @@ describe "lifecycle callbacks" do
 
     it "fires the same chain for an instance saved by hand" do
       record = FSpecHooked.new(name: "Léo")
-      record.save
+      record.save!
       record.trace.should eq(["before_save", "before_create", "after_create", "after_save"])
     end
   end
@@ -21,7 +21,7 @@ describe "lifecycle callbacks" do
       record = FSpecHooked.objects.create(name: "Léo")
       record.trace.clear
       record.name = "Zoé"
-      record.save
+      record.save!
       record.trace.should eq(["before_save", "after_save"])
     end
   end
