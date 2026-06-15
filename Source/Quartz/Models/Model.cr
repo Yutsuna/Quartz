@@ -1,4 +1,5 @@
 require "json"
+require "db"
 require "./Field"
 require "./Annotations"
 
@@ -254,12 +255,18 @@ module Quartz
 
         \{% unless @type.abstract? %}
 
-          # Validates, then persists. Raises `Quartz::EValidation`
-          # (carrying the `errors`) when the record is invalid.
-          # Inherits `save`'s callbacks (fired after validation passes).
-          #
-          # Validates then persists the record through the model's manager, assigning an id on first save.
-          # Raises `Quartz::EValidation` (carrying the `errors`) when the record is invalid.
+          # Validates, then persists.
+          # Returns `true` and persists the record when valid;
+          # Returns `false` without persisting when invalid.
+          def save : Bool
+            return false unless errors.empty?
+            \{{@type}}.objects.store( self )
+            true
+          end
+
+          # Validates, then persists.
+          # Raises `Quartz::EValidation` when the record is invalid;
+          # Returns `self` when valid.
           def save! : self
             errs = errors
             raise Quartz::EValidation.new( \{{@type.name.stringify}}, errs ) unless errs.empty?
@@ -277,6 +284,90 @@ module Quartz
               _quartz_after_delete
             end
             deleted
+          end
+
+          #----------------------------------------------------------------------
+
+          # SQL backend metadata.
+          # Table name for this model: the underscored class name pluralized,
+          # e.g. `Post` -> `"posts"`.
+          def self._quartz_table : String
+            "#{model_name.underscore}s"
+          end
+
+          # One `"<column> <SQLTYPE> [NOT NULL]"` clause per field, for the
+          # `CREATE TABLE` body (the `id` primary key is added by the adapter).
+          #
+          # Type map: String/Time -> TEXT, Bool/Int*/UInt64 -> INTEGER,
+          # Float32/64 -> REAL, everything else (e.g. Array(String)) -> TEXT
+          # holding the field's JSON. Nilable fields produce a nullable column.
+          def self._quartz_column_defs : Array( String )
+            [
+              \{% for d in fields %}
+                \{% rt = d.type.resolve %}
+                \{% nilable = rt.union? && rt.union_types.any? { |t| t.stringify == "Nil" } %}
+                \{% base = rt.union? ? rt.union_types.find { |t| t.stringify != "Nil" } : rt %}
+                \{% bn = base.stringify %}
+                \{% if bn == "String" || bn == "Time" %} \{% sqltype = "TEXT" %}
+                \{% elsif bn == "Bool" || bn == "Int8" || bn == "Int16" || bn == "Int32" || bn == "Int64" || bn == "UInt64" %} \{% sqltype = "INTEGER" %}
+                \{% elsif bn == "Float32" || bn == "Float64" %} \{% sqltype = "REAL" %}
+                \{% else %} \{% sqltype = "TEXT" %} \{% end %}
+                "\{{d.var}} \{{sqltype.id}}\{% unless nilable %} NOT NULL\{% end %}",
+              \{% end %}
+            ] of String
+          end
+
+          # Column names in declared order (the field names), for INSERT/SELECT
+          # column lists.
+          def self._quartz_columns : Array( String )
+            fields
+          end
+
+          # Builds a record from a result-set row: `id` first, then every field
+          # column in declared order, each read with the type-appropriate
+          # expression. The typed reader the generic adapter delegates to.
+          def self._quartz_from_rs( rs : DB::ResultSet ) : self
+            _qid = rs.read( Int64 )
+            record = new(
+              \{% for d in fields %}
+                \{% rt = d.type.resolve %}
+                \{% nilable = rt.union? && rt.union_types.any? { |t| t.stringify == "Nil" } %}
+                \{% base = rt.union? ? rt.union_types.find { |t| t.stringify != "Nil" } : rt %}
+                \{% bn = base.stringify %}
+                \{{d.var}}: (
+                  \{% if bn == "UInt64" %}
+                    \{% if nilable %} rs.read( Int64? ).try( &.to_u64 ) \{% else %} rs.read( Int64 ).to_u64 \{% end %}
+                  \{% elsif bn == "String" || bn == "Bool" || bn == "Int8" || bn == "Int16" || bn == "Int32" || bn == "Int64" || bn == "Float32" || bn == "Float64" || bn == "Time" %}
+                    rs.read( \{{d.type}} )
+                  \{% else %}
+                    \{% if nilable %} rs.read( String? ).try { |s| ( \{{base}} ).from_json( s ) } \{% else %} ( \{{base}} ).from_json( rs.read( String ) ) \{% end %}
+                  \{% end %}
+                ),
+              \{% end %}
+            )
+            record.id = _qid.to_u64
+            record
+          end
+
+          # This record's field values coerced to `DB::Any`, in declared order,
+          # for parameter binding: UInt64 -> Int64, complex types -> JSON text,
+          # native scalars/Time as-is.
+          def _quartz_db_args : Array( DB::Any )
+            args = [] of DB::Any
+            \{% for d in fields %}
+              \{% rt = d.type.resolve %}
+              \{% nilable = rt.union? && rt.union_types.any? { |t| t.stringify == "Nil" } %}
+              \{% base = rt.union? ? rt.union_types.find { |t| t.stringify != "Nil" } : rt %}
+              \{% bn = base.stringify %}
+              \{% if bn == "UInt64" %}
+                args << \{% if nilable %} @\{{d.var}}.try( &.to_i64 ) \{% else %} @\{{d.var}}.to_i64 \{% end %}
+              \{% elsif bn == "String" || bn == "Bool" || bn == "Int8" || bn == "Int16" || bn == "Int32" || bn == "Int64" || bn == "Float32" || bn == "Float64" || bn == "Time" %}
+                args << @\{{d.var}}
+              \{% else %}
+                args << \{% if nilable %} @\{{d.var}}.try( &.to_json ) \{% else %} @\{{d.var}}.to_json \{% end %}
+              \{% end %}
+            \{% end %}
+            args
           end
         \{% end %}
 

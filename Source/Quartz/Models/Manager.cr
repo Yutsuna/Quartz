@@ -81,9 +81,13 @@ module Quartz
     #--------------------------------------------------------------------------
     # Derived query API: composed on top of the storage primitives.
 
-    # Instantiates a record from keyword arguments and persists it.
+    # Instantiates a record from keyword arguments, validates it, and persists it.
+    # Raises `Quartz::EValidation` when the record is invalid.
     def create( **args ) : TInstance
-      store( TInstance.new( **args ) )
+      record = TInstance.new( **args )
+      errs = record.errors
+      raise EValidation.new( TInstance.name, errs ) unless errs.empty?
+      store( record )
     end
 
     # Returns the record with the given id, or raises `ERecordNotFound`.
