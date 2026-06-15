@@ -12,6 +12,28 @@ def with_sqlite_adapter( klass : T.class, &block : Quartz::FSqliteAdapter( T ) -
   end
 end
 
+# Builds a spec via the model's typed helpers, mirroring `AModel.where`, then
+# evaluates it against both the SQLite and in-memory adapters and asserts
+# identical results (push-down ↔ in-memory parity).
+def assert_parity( adapter : Quartz::FSqliteAdapter( FSpecUser ), &build : Quartz::FQuerySpec( FSpecUser ) -> _ ) : Nil
+  sql_mgr = Quartz::FManager( FSpecUser ).new( adapter )
+  mem_mgr = Quartz::FManager( FSpecUser ).new
+
+  [sql_mgr, mem_mgr].each do |mgr|
+    mgr.create( name: "Léo", age: 24 )
+    mgr.create( name: "Bob", age: 15 )
+    mgr.create( name: "admin", age: 40 )
+  end
+
+  sql_spec = Quartz::FQuerySpec( FSpecUser ).new
+  mem_spec = Quartz::FQuerySpec( FSpecUser ).new
+  build.call( sql_spec )
+  build.call( mem_spec )
+
+  sql_mgr.fetch( sql_spec ).map( &.name ).should eq( mem_mgr.fetch( mem_spec ).map( &.name ) )
+  sql_mgr.fetch_count( sql_spec ).should eq( mem_mgr.fetch_count( mem_spec ) )
+end
+
 describe Quartz::FSqliteAdapter do
   describe "#store" do
     it "assigns sequential ids to unpersisted records" do
@@ -154,6 +176,50 @@ describe Quartz::FSqliteAdapter do
         manager.count.should eq( 2 )
         manager.find_by?( name: "Bob" ).try( &.age ).should eq( 18 )
         manager.where { |u| u.age >= 20 }.map( &.name ).should eq( ["Léo"] )
+      end
+    end
+  end
+
+  describe "push-down queries (parity with the in-memory adapter)" do
+    it "matches an endless Range (>=)" do
+      with_sqlite_adapter( FSpecUser ) do |adapter|
+        assert_parity( adapter ) { |s| FSpecUser._q_age( s, 18.., false ) }
+      end
+    end
+
+    it "matches a closed Range (BETWEEN)" do
+      with_sqlite_adapter( FSpecUser ) do |adapter|
+        assert_parity( adapter ) { |s| FSpecUser._q_age( s, 18..30, false ) }
+      end
+    end
+
+    it "matches an IN list" do
+      with_sqlite_adapter( FSpecUser ) do |adapter|
+        assert_parity( adapter ) { |s| FSpecUser._q_name( s, ["Léo", "Bob"], false ) }
+      end
+    end
+
+    it "matches an explicit operator hash" do
+      with_sqlite_adapter( FSpecUser ) do |adapter|
+        assert_parity( adapter ) { |s| FSpecUser._q_age( s, {gt: 18}, false ) }
+      end
+    end
+
+    it "negates a condition (exclude)" do
+      with_sqlite_adapter( FSpecUser ) do |adapter|
+        assert_parity( adapter ) { |s| FSpecUser._q_age( s, ...18, true ) }
+      end
+    end
+
+    it "orders, limits and offsets" do
+      with_sqlite_adapter( FSpecUser ) do |adapter|
+        assert_parity( adapter ) do |s|
+          FSpecUser._q_age( s, 0.., false )
+          s.order_column = "age"
+          s.order_reverse = true
+          s.limit = 2
+          s.offset = 1
+        end
       end
     end
   end

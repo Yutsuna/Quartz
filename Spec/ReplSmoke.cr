@@ -56,3 +56,5 @@ puts ReplUser.objects.filter { |u| u.age > 18 }.order_by { |u| u.age }.count
 puts ReplHooked.objects.create(name: "bob").name
 
 puts ReplStamped.objects.create(title: "x").created_at.class
+
+puts ReplUser.where(age: 18..).order_by(:age).map(&.age)

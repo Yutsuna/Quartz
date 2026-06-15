@@ -27,5 +27,6 @@ describe "crystal i compatibility" do
     lines.should contain("2")
     lines.should contain("BOB")
     lines.should contain("Time")
+    lines.should contain("[18, 24, 40]")
   end
 end
