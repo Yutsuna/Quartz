@@ -2,6 +2,7 @@ require "json"
 require "db"
 require "./Field"
 require "./Annotations"
+require "../SQL/Types"
 
 
 module Quartz
@@ -81,16 +82,10 @@ module Quartz
     end
 
     #--------------------------------------------------------------------------
-    # Type-safe push-down query entry points. Defined on `AModel`, so every
-    # concrete subclass inherits them and `@type` resolves to that subclass at
-    # the call site (`User.where(...)`). They reference the per-field, typed
-    # `_q_<field>` helpers generated in the `finished` hook, so a wrong value
-    # type or an unknown field name is a **compile-time** error.
 
-    # Filters records. **Keyword** form -> a lazy, chainable `FQuerySet` over a
-    # declarative spec the adapter pushes down; each value is a native Crystal
-    # value (raw `=`, `Range` `>=`/`<`/`BETWEEN`, `Array` `IN`, op-`NamedTuple`
-    # `{gt: ...}`). **Block** form -> the eager `Array` of matching records.
+    # Type-safe push-down query entry points.
+    #
+    # Wrong value | type | field name -> compile-time error
     #
     # ```
     # User.where( age: 18.. )                      # >= 18  (push-down)
@@ -334,10 +329,10 @@ module Quartz
           end
 
           #----------------------------------------------------------------------
-          # Type-safe push-down query helpers (consumed by `FManager#where` /
-          # `FQuerySet#where`). One typed `_q_<field>` per field accepts only
-          # values compatible with the field's type — a wrong type or an unknown
-          # field name is a *compile-time* error.
+
+          # Type-safe push-down query helpers.
+          # One typed `_q_<field>` per field accepts only
+          # values compatible with the field's type.
 
           \{% for d in fields %}
             \{% rt = d.type.resolve %}
@@ -400,22 +395,13 @@ module Quartz
 
           # One `"<column> <SQLTYPE> [NOT NULL]"` clause per field, for the
           # `CREATE TABLE` body (the `id` primary key is added by the adapter).
-          #
-          # Type map: String/Time -> TEXT, Bool/Int*/UInt64 -> INTEGER,
-          # Float32/64 -> REAL, everything else (e.g. Array(String)) -> TEXT
-          # holding the field's JSON. Nilable fields produce a nullable column.
           def self._quartz_column_defs : Array( String )
             [
               \{% for d in fields %}
                 \{% rt = d.type.resolve %}
                 \{% nilable = rt.union? && rt.union_types.any? { |t| t.stringify == "Nil" } %}
                 \{% base = rt.union? ? rt.union_types.find { |t| t.stringify != "Nil" } : rt %}
-                \{% bn = base.stringify %}
-                \{% if bn == "String" || bn == "Time" %} \{% sqltype = "TEXT" %}
-                \{% elsif bn == "Bool" || bn == "Int8" || bn == "Int16" || bn == "Int32" || bn == "Int64" || bn == "UInt64" %} \{% sqltype = "INTEGER" %}
-                \{% elsif bn == "Float32" || bn == "Float64" %} \{% sqltype = "REAL" %}
-                \{% else %} \{% sqltype = "TEXT" %} \{% end %}
-                "\{{d.var}} \{{sqltype.id}}\{% unless nilable %} NOT NULL\{% end %}",
+                "\{{d.var}} \{{ SQL.sql_type_of( base ).id \}\}\{% unless nilable %} NOT NULL\{% end %}",
               \{% end %}
             ] of String
           end
@@ -433,19 +419,7 @@ module Quartz
             _qid = rs.read( Int64 )
             record = new(
               \{% for d in fields %}
-                \{% rt = d.type.resolve %}
-                \{% nilable = rt.union? && rt.union_types.any? { |t| t.stringify == "Nil" } %}
-                \{% base = rt.union? ? rt.union_types.find { |t| t.stringify != "Nil" } : rt %}
-                \{% bn = base.stringify %}
-                \{{d.var}}: (
-                  \{% if bn == "UInt64" %}
-                    \{% if nilable %} rs.read( Int64? ).try( &.to_u64 ) \{% else %} rs.read( Int64 ).to_u64 \{% end %}
-                  \{% elsif bn == "String" || bn == "Bool" || bn == "Int8" || bn == "Int16" || bn == "Int32" || bn == "Int64" || bn == "Float32" || bn == "Float64" || bn == "Time" %}
-                    rs.read( \{{d.type}} )
-                  \{% else %}
-                    \{% if nilable %} rs.read( String? ).try { |s| ( \{{base}} ).from_json( s ) } \{% else %} ( \{{base}} ).from_json( rs.read( String ) ) \{% end %}
-                  \{% end %}
-                ),
+              \{{d.var}}: SQL::from_rs(rs, \{{d.type}}),
               \{% end %}
             )
             record.id = _qid.to_u64
@@ -458,17 +432,7 @@ module Quartz
           def _quartz_db_args : Array( DB::Any )
             args = [] of DB::Any
             \{% for d in fields %}
-              \{% rt = d.type.resolve %}
-              \{% nilable = rt.union? && rt.union_types.any? { |t| t.stringify == "Nil" } %}
-              \{% base = rt.union? ? rt.union_types.find { |t| t.stringify != "Nil" } : rt %}
-              \{% bn = base.stringify %}
-              \{% if bn == "UInt64" %}
-                args << \{% if nilable %} @\{{d.var}}.try( &.to_i64 ) \{% else %} @\{{d.var}}.to_i64 \{% end %}
-              \{% elsif bn == "String" || bn == "Bool" || bn == "Int8" || bn == "Int16" || bn == "Int32" || bn == "Int64" || bn == "Float32" || bn == "Float64" || bn == "Time" %}
-                args << @\{{d.var}}
-              \{% else %}
-                args << \{% if nilable %} @\{{d.var}}.try( &.to_json ) \{% else %} @\{{d.var}}.to_json \{% end %}
-              \{% end %}
+              args << SQL.to_db_arg(@\{{d.var}})
             \{% end %}
             args
           end
