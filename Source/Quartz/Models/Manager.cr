@@ -116,9 +116,24 @@ module Quartz
     end
 
     # Returns every record for which the block is truthy (eager `Array`).
-    # For a lazy, chainable equivalent see `#filter` / `#query`.
+    # For a lazy, chainable equivalent see `#filter` / `#query`
     def where( & : TInstance -> Bool ) : Array( TInstance )
       all.select { |record| yield record }
+    end
+
+    # Lazy, chainable inverse filter (block form).
+    def exclude( & block : TInstance -> Bool ) : FQuerySet( TInstance )
+      query.exclude( &block )
+    end
+
+    # Evaluates a declarative push-down spec via the adapter
+    def fetch( spec : FQuerySpec( TInstance ) ) : Array( TInstance )
+      @adapter.fetch( spec )
+    end
+
+    # Number of records the spec yields, pushed down to the adapter.
+    def fetch_count( spec : FQuerySpec( TInstance ) ) : Int32
+      @adapter.fetch_count( spec )
     end
 
     #--------------------------------------------------------------------------
@@ -132,11 +147,6 @@ module Quartz
     # Lazy, chainable filter (the composable sibling of `#where`).
     def filter( & block : TInstance -> Bool ) : FQuerySet( TInstance )
       query.filter( &block )
-    end
-
-    # Lazy, chainable inverse filter.
-    def exclude( & block : TInstance -> Bool ) : FQuerySet( TInstance )
-      query.exclude( &block )
     end
 
     # Lazy, chainable ordering by the key the block returns.
