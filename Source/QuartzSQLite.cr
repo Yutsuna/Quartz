@@ -81,6 +81,27 @@ module Quartz
       @db.scalar( "SELECT COUNT(*) FROM #{_table}" ).as( Int64 ).to_i32
     end
 
+    # Push-down query: compiles `spec` to parameterized
+    # `WHERE` / `ORDER BY` / `LIMIT` / `OFFSET`.
+    # Column names come from the validated field metadata
+    # Every value is bound as a `?` parameter.
+    def fetch( spec : Quartz::FQuerySpec( TInstance ) ) : Array( TInstance )
+      where_sql, args = _compile_where( spec )
+      sql = "SELECT #{_select_list} FROM #{_table}#{where_sql}#{_order_sql( spec )}#{_page_sql( spec )}"
+      records = [] of TInstance
+      @db.query( sql, args: args ) do |rs|
+        rs.each { records << TInstance._quartz_from_rs( rs ) }
+      end
+      records
+    end
+
+    # Number of records the spec yields. Uses a fast `COUNT(*)` over the `WHERE`.
+    def fetch_count( spec : Quartz::FQuerySpec( TInstance ) ) : Int32
+      return fetch( spec ).size if spec.limit || spec.offset
+      where_sql, args = _compile_where( spec )
+      @db.scalar( "SELECT COUNT(*) FROM #{_table}#{where_sql}", args: args ).as( Int64 ).to_i32
+    end
+
     # Returns the record with the given id, or `nil`.
     def find?( id : UInt64 ) : TInstance?
       _query_one( "SELECT #{_select_list} FROM #{_table} WHERE id = ?", id.to_i64 )
@@ -128,6 +149,51 @@ module Quartz
       columns = "id INTEGER PRIMARY KEY AUTOINCREMENT"
       columns += ", #{defs.join( ", " )}" unless defs.empty?
       @db.exec( "CREATE TABLE IF NOT EXISTS #{_table} (#{columns})" )
+    end
+
+    # Compiles the spec's conditions into a `" WHERE ..."` fragment and the matching bound arguments.
+    # Each condition becomes `[NOT] (p1 AND p2 ...)`, groups AND-joined.
+    private def _compile_where( spec : Quartz::FQuerySpec( TInstance ) ) : { String, Array( DB::Any ) }
+      args = [] of DB::Any
+      groups = [] of String
+      spec.conditions.each do |cond|
+        atoms = cond.predicates.map do |p|
+          if p.op == Quartz::FOp::In
+            placeholders = Array.new( p.values.size, "?" ).join( ", " )
+            p.values.each { |v| args << v }
+            "#{p.column} IN (#{placeholders})"
+          else
+            args << p.value
+            "#{p.column} #{p.op.to_sql} ?"
+          end
+        end
+        clause = atoms.join( " AND " )
+        clause = "(#{clause})" if atoms.size > 1
+        clause = "NOT (#{clause})" if cond.negated
+        groups << clause
+      end
+      groups.empty? ? { "", args } : { " WHERE #{groups.join( " AND " )}", args }
+    end
+
+    # `" ORDER BY <col> [DESC]"`, or empty when the spec is unordered.
+    private def _order_sql( spec : Quartz::FQuerySpec( TInstance ) ) : String
+      if col = spec.order_column
+        " ORDER BY #{col}#{spec.order_reverse ? " DESC" : ""}"
+      else
+        ""
+      end
+    end
+
+    # `" LIMIT n [OFFSET m]"`. SQLite requires a `LIMIT` before an `OFFSET`, so a
+    # lone offset uses `LIMIT -1` (unbounded).
+    private def _page_sql( spec : Quartz::FQuerySpec( TInstance ) ) : String
+      if ( lim = spec.limit ) || ( off = spec.offset )
+        sql = " LIMIT #{spec.limit || -1}"
+        sql += " OFFSET #{spec.offset}" if spec.offset
+        sql
+      else
+        ""
+      end
     end
 
     # Runs a single-row query, returning the mapped record or `nil` when empty.
