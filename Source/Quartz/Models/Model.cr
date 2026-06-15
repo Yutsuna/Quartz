@@ -401,7 +401,7 @@ module Quartz
                 \{% rt = d.type.resolve %}
                 \{% nilable = rt.union? && rt.union_types.any? { |t| t.stringify == "Nil" } %}
                 \{% base = rt.union? ? rt.union_types.find { |t| t.stringify != "Nil" } : rt %}
-                "\{{d.var}} \{{ SQL.sql_type_of( base ).id \}\}\{% unless nilable %} NOT NULL\{% end %}",
+                "\{{d.var}} #{ Quartz::SQL.to_sql_type( \{{ base.stringify }} ) }\{% unless nilable %} NOT NULL\{% end %}",
               \{% end %}
             ] of String
           end
@@ -419,7 +419,7 @@ module Quartz
             _qid = rs.read( Int64 )
             record = new(
               \{% for d in fields %}
-              \{{d.var}}: SQL::from_rs(rs, \{{d.type}}),
+              \{{d.var}}: Quartz::SQL.from_rs(rs, \{{d.type}}),
               \{% end %}
             )
             record.id = _qid.to_u64
@@ -432,7 +432,7 @@ module Quartz
           def _quartz_db_args : Array( DB::Any )
             args = [] of DB::Any
             \{% for d in fields %}
-              args << SQL.to_db_arg(@\{{d.var}})
+              args << Quartz::SQL.to_db_arg(@\{{d.var}})
             \{% end %}
             args
           end
